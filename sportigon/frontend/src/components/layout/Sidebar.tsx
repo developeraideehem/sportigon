@@ -1,7 +1,7 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Home,
+
   Users,
   MessageCircle,
   Trophy,
@@ -9,17 +9,26 @@ import {
   Settings,
   LogOut
 } from 'lucide-react'
+import { useAuthStore } from '@/stores/authStore'
+import toast from 'react-hot-toast'
 
 const Sidebar: React.FC = () => {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { logout } = useAuthStore()
 
   const navItems = [
-    { icon: Home, label: 'Home', path: '/' },
     { icon: Users, label: 'Feed', path: '/feed' },
     { icon: MessageCircle, label: 'Messages', path: '/messages' },
     { icon: Trophy, label: 'Sports', path: '/sports' },
     { icon: Activity, label: 'Live Scores', path: '/live-scores' },
   ]
+
+  const handleLogout = () => {
+    logout()
+    toast.success('Logged out successfully')
+    navigate('/login')
+  }
 
   return (
     <aside className="w-64 bg-white shadow-lg h-screen fixed left-0 top-0">
@@ -63,7 +72,10 @@ const Sidebar: React.FC = () => {
             <Settings className="w-5 h-5" />
             <span className="font-medium">Settings</span>
           </Link>
-          <button className="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 w-full">
+          <button
+            onClick={handleLogout}
+            className="flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors duration-200 w-full"
+          >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Logout</span>
           </button>
