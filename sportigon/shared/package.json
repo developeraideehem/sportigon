@@ -1,0 +1,23 @@
+{
+  "name": "sportigon-shared",
+  "version": "1.0.0",
+  "description": "Shared utilities and types for Sportigon",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  },
+  "keywords": [
+    "shared",
+    "utilities",
+    "types",
+    "typescript"
+  ],
+  "author": "Sportigon Team",
+  "license": "MIT"
+}

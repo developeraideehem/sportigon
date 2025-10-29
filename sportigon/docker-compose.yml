@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # Main application backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sportigon-backend
+    ports:
+      - "3001:3001"
+      - "9229:9229" # Debug port
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongodb:27017/sportigon
+      - POSTGRES_URI=postgresql://postgres:password@postgres:5432/sportigon_sports
+      - REDIS_URI=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - mongodb
+      - postgres
+      - redis
+    command: npm run dev
+
+  # MongoDB for user data and application data
+  mongodb:
+    image: mongo:6.0
+    container_name: sportigon-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=sportigon
+    volumes:
+      - mongodb_data:/data/db
+
+  # PostgreSQL for sports data and statistics
+  postgres:
+    image: postgres:15
+    container_name: sportigon-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=sportigon_sports
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7.2-alpine
+    container_name: sportigon-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # Redis Commander for debugging Redis data
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: sportigon-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+
+volumes:
+  mongodb_data:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: sportigon-network
