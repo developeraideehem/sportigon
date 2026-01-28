@@ -1,133 +1,187 @@
 import express from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
+import { 
+  registerUser, 
+  loginUser, 
+  refreshTokens, 
+  logoutUser,
+  RegisterData,
+  LoginData 
+} from '../services/authService';
+import { authenticateToken, xssProtection, validateInput } from '../middleware/auth';
+import { z } from 'zod';
 
 const router = express.Router();
 
-// Types
-interface LoginRequest {
-  email: string;
-  password: string;
-}
+// Zod schemas for validation
+const registerSchema = z.object({
+  username: z.string().min(3).max(30),
+  email: z.string().email(),
+  password: z.string().min(8),
+  firstName: z.string().min(1).max(50),
+  lastName: z.string().min(1).max(50)
+});
 
-interface RegisterRequest {
-  username: string;
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-}
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1)
+});
+
+const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(1)
+});
 
 // @route   POST /api/auth/login
-// @desc    Authenticate user & get token
+// @desc    Authenticate user and return JWT tokens
 // @access  Public
-router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').notEmpty(),
-], async (req: express.Request, res: express.Response) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+router.post('/login', 
+  xssProtection,
+  validateInput(loginSchema),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { email, password }: LoginData = req.body;
+
+      const result = await loginUser({ email, password });
+
+      res.json({
+        success: true,
+        user: result.user,
+        tokens: result.tokens
+      });
+
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      if (error.message.includes('Invalid email or password')) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid email or password'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Server error during login'
+      });
     }
-
-    const { email, password }: LoginRequest = req.body;
-
-    // TODO: Implement actual user authentication
-    // For now, return a mock successful login
-    const mockUser = {
-      id: '1',
-      username: 'testuser',
-      email: email,
-      firstName: 'Test',
-      lastName: 'User',
-    };
-
-    const token = jwt.sign(
-      { userId: mockUser.id },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
-
-    res.json({
-      success: true,
-      token,
-      user: mockUser,
-    });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Server error' });
   }
-});
+);
 
 // @route   POST /api/auth/register
-// @desc    Register user
+// @desc    Register new user and return JWT tokens
 // @access  Public
-router.post('/register', [
-  body('username').isLength({ min: 3, max: 30 }),
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 6 }),
-  body('firstName').trim().notEmpty(),
-  body('lastName').trim().notEmpty(),
-], async (req: express.Request, res: express.Response) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+router.post('/register', 
+  xssProtection,
+  validateInput(registerSchema),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { username, email, password, firstName, lastName }: RegisterData = req.body;
+
+      const result = await registerUser({
+        username,
+        email,
+        password,
+        firstName,
+        lastName
+      });
+
+      res.status(201).json({
+        success: true,
+        user: result.user,
+        tokens: result.tokens,
+        message: 'Registration successful'
+      });
+
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      
+      if (error.message.includes('Email already registered') || 
+          error.message.includes('Username already taken') ||
+          error.message.includes('Invalid email format') ||
+          error.message.includes('Password validation failed')) {
+        return res.status(400).json({
+          success: false,
+          error: error.message
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'Server error during registration'
+      });
     }
-
-    const { username, email, password, firstName, lastName }: RegisterRequest = req.body;
-
-    // TODO: Implement actual user registration
-    // For now, return a mock successful registration
-    const mockUser = {
-      id: Date.now().toString(),
-      username,
-      email,
-      firstName,
-      lastName,
-    };
-
-    const token = jwt.sign(
-      { userId: mockUser.id },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
-
-    res.status(201).json({
-      success: true,
-      token,
-      user: mockUser,
-    });
-
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Server error' });
   }
-});
+);
 
 // @route   GET /api/auth/me
-// @desc    Get current user
+// @desc    Get current authenticated user
 // @access  Private
-router.get('/me', async (req: express.Request, res: express.Response) => {
-  try {
-    // TODO: Implement getting current user from JWT token
-    res.json({
-      success: true,
-      user: {
-        id: '1',
-        username: 'testuser',
-        email: 'test@example.com',
-        firstName: 'Test',
-        lastName: 'User',
-      },
-    });
-  } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({ error: 'Server error' });
+router.get('/me', 
+  authenticateToken,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const authReq = req as any;
+      res.json({
+        success: true,
+        user: authReq.user
+      });
+    } catch (error) {
+      console.error('Get user error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Server error'
+      });
+    }
   }
-});
+);
+
+// @route   POST /api/auth/refresh
+// @desc    Refresh access token using refresh token
+// @access  Public
+router.post('/refresh',
+  validateInput(refreshTokenSchema),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { refreshToken } = req.body;
+
+      const tokens = await refreshTokens(refreshToken);
+
+      res.json({
+        success: true,
+        tokens
+      });
+    } catch (error: any) {
+      console.error('Token refresh error:', error);
+      res.status(401).json({
+        success: false,
+        error: 'Invalid refresh token'
+      });
+    }
+  }
+);
+
+// @route   POST /api/auth/logout
+// @desc    Logout user and revoke refresh token
+// @access  Private
+router.post('/logout',
+  authenticateToken,
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const authReq = req as any;
+      await logoutUser(authReq.user.id);
+
+      res.json({
+        success: true,
+        message: 'Logged out successfully'
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Server error during logout'
+      });
+    }
+  }
+);
 
 export default router;

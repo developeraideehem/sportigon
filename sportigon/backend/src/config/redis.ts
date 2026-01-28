@@ -12,7 +12,7 @@ export const connectRedis = async (): Promise<void> => {
     console.log('✅ Redis Connected');
 
     // Store client globally for use in other modules
-    global.__redisClient = client;
+    (global as any).__redisClient = client;
 
     // Handle connection events
     client.on('error', (err) => {
@@ -31,8 +31,8 @@ export const connectRedis = async (): Promise<void> => {
 
 // Export client getter for use in other modules
 export const getRedisClient = (): Redis.RedisClientType => {
-  if (!global.__redisClient) {
+  if (!(global as any).__redisClient) {
     throw new Error('Redis not connected. Call connectRedis() first.');
   }
-  return global.__redisClient;
+  return (global as any).__redisClient;
 };

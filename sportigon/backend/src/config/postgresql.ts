@@ -21,7 +21,7 @@ export const connectPostgreSQL = async (): Promise<void> => {
     });
 
     // Store pool globally for use in other modules
-    global.__postgresPool = pool;
+    (global as any).__postgresPool = pool;
 
   } catch (error) {
     console.error('❌ Failed to connect to PostgreSQL:', error);
@@ -31,8 +31,8 @@ export const connectPostgreSQL = async (): Promise<void> => {
 
 // Export pool getter for use in other modules
 export const getPostgresPool = (): Pool => {
-  if (!global.__postgresPool) {
+  if (!(global as any).__postgresPool) {
     throw new Error('PostgreSQL not connected. Call connectPostgreSQL() first.');
   }
-  return global.__postgresPool;
+  return (global as any).__postgresPool;
 };
