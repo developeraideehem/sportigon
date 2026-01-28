@@ -2,16 +2,27 @@ import { useEffect, useState } from 'react';
 import { useMatchStore } from '@/store/matchStore';
 import { supabase, Match } from '@/lib/supabase';
 import MatchCard from '@/components/MatchCard';
-import { Calendar, Filter } from 'lucide-react';
+import { Calendar, Filter, Wifi, WifiOff, Database } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
+import { fetchTodayMatches, getApiUsage } from '@/services/apiSports';
+import {
+  storeMatchesInCache,
+  fetchMatchesFromCache,
+  shouldFetchFromApi,
+} from '@/services/cacheService';
 
 export default function LiveScores() {
   const { matches, selectedSport, selectedLeague, filterDate, setMatches, setSelectedLeague, setFilterDate } = useMatchStore();
   const [loading, setLoading] = useState(true);
   const [leagues, setLeagues] = useState<string[]>([]);
+  const [dataSource, setDataSource] = useState<'api' | 'cache' | 'mock'>('cache');
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [apiUsage, setApiUsage] = useState({ callsToday: 0, maxCalls: 100, remaining: 100 });
 
   useEffect(() => {
     fetchMatches();
+
+    // Set up real-time subscription for cache updates
     const subscription = supabase
       .channel('matches')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, (payload) => {
@@ -27,31 +38,96 @@ export default function LiveScores() {
     };
   }, [selectedSport, filterDate]);
 
+  // Auto-refresh live matches every 30 seconds
+  useEffect(() => {
+    const hasLiveMatches = matches.some(m => m.status === 'live');
+
+    if (!hasLiveMatches) {
+      return;
+    }
+
+    console.log('Setting up auto-refresh for live matches...');
+    const interval = setInterval(() => {
+      console.log('Auto-refreshing live matches...');
+      fetchMatches();
+    }, 30000); // 30 seconds
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [matches, selectedSport]);
+
   const fetchMatches = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('matches')
-        .select('*')
-        .eq('sport', selectedSport)
-        .order('match_time', { ascending: true });
 
-      if (error) throw error;
+      // Update API usage stats
+      setApiUsage(getApiUsage());
 
-      if (data && data.length > 0) {
-        setMatches(data as Match[]);
-        const uniqueLeagues = [...new Set(data.map((m: Match) => m.league))];
-        setLeagues(uniqueLeagues);
-      } else {
-        const mockMatches = generateMockMatches(selectedSport);
-        setMatches(mockMatches);
-        const uniqueLeagues = [...new Set(mockMatches.map(m => m.league))];
-        setLeagues(uniqueLeagues);
+      // Step 1: Check cache first
+      const cachedData = await fetchMatchesFromCache(selectedSport);
+
+      // Step 2: Decide if we need to fetch from API
+      const needsApiFetch = cachedData
+        ? shouldFetchFromApi(cachedData.matches, cachedData.metadata.lastUpdate)
+        : true;
+
+      if (needsApiFetch) {
+        console.log(`Fetching fresh ${selectedSport} data from API-Sports...`);
+
+        // Try to fetch from API
+        const apiMatches = await fetchTodayMatches(selectedSport);
+
+        if (apiMatches && apiMatches.length > 0) {
+          // Success! Store in cache and use API data
+          await storeMatchesInCache(apiMatches);
+          setMatches(apiMatches);
+          setDataSource('api');
+          setLastUpdate(new Date());
+
+          const uniqueLeagues = [...new Set(apiMatches.map(m => m.league))];
+          setLeagues(uniqueLeagues);
+
+          console.log(`✅ Loaded ${apiMatches.length} matches from API`);
+          setApiUsage(getApiUsage());
+          return;
+        } else {
+          console.log('API returned no data, falling back to cache...');
+        }
       }
-    } catch (error) {
-      console.error('Error fetching matches:', error);
+
+      // Step 3: Use cache if available
+      if (cachedData && cachedData.matches.length > 0) {
+        setMatches(cachedData.matches);
+        setDataSource('cache');
+        setLastUpdate(new Date(cachedData.metadata.lastUpdate));
+
+        const uniqueLeagues = [...new Set(cachedData.matches.map(m => m.league))];
+        setLeagues(uniqueLeagues);
+
+        console.log(`📦 Loaded ${cachedData.matches.length} matches from cache`);
+        return;
+      }
+
+      // Step 4: Fallback to mock data
+      console.log('No API or cache data available, using mock data...');
       const mockMatches = generateMockMatches(selectedSport);
       setMatches(mockMatches);
+      setDataSource('mock');
+      setLastUpdate(new Date());
+
+      const uniqueLeagues = [...new Set(mockMatches.map(m => m.league))];
+      setLeagues(uniqueLeagues);
+
+    } catch (error) {
+      console.error('Error fetching matches:', error);
+
+      // Final fallback to mock data
+      const mockMatches = generateMockMatches(selectedSport);
+      setMatches(mockMatches);
+      setDataSource('mock');
+      setLastUpdate(new Date());
+
       const uniqueLeagues = [...new Set(mockMatches.map(m => m.league))];
       setLeagues(uniqueLeagues);
     } finally {
@@ -64,8 +140,8 @@ export default function LiveScores() {
     const leagues = sport === 'Football'
       ? ['Premier League', 'La Liga', 'Serie A', 'Bundesliga']
       : sport === 'Basketball'
-      ? ['NBA', 'EuroLeague']
-      : ['ATP Tour', 'WTA Tour'];
+        ? ['NBA', 'EuroLeague']
+        : ['ATP Tour', 'WTA Tour'];
 
     const teams = {
       'Premier League': [
@@ -133,7 +209,12 @@ export default function LiveScores() {
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Live Scores</h1>
-          <p className="text-gray-600">Real-time sports scores and updates</p>
+          <p className="text-gray-600">
+            Real-time sports scores and updates
+            {dataSource === 'api' && ' • Live from API-Football'}
+            {dataSource === 'cache' && ` • Cached data (updated ${Math.floor((Date.now() - lastUpdate.getTime()) / 1000 / 60)}m ago)`}
+            {dataSource === 'mock' && ' • Demo data'}
+          </p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
@@ -163,7 +244,7 @@ export default function LiveScores() {
               </button>
             </div>
 
-            <div className="flex items-center space-x-2 ml-auto">
+            <div className="flex items-center space-x-2">
               <Filter className="w-5 h-5 text-gray-500" />
               <select
                 value={selectedLeague || ''}
@@ -175,6 +256,40 @@ export default function LiveScores() {
                   <option key={league} value={league}>{league}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Data Source Indicator */}
+            <div className="ml-auto flex items-center space-x-3">
+              <div
+                className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${dataSource === 'api'
+                  ? 'bg-green-100 text-green-700'
+                  : dataSource === 'cache'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-700'
+                  }`}
+              >
+                {dataSource === 'api' ? (
+                  <>
+                    <Wifi className="w-3 h-3" />
+                    <span>Live API</span>
+                  </>
+                ) : dataSource === 'cache' ? (
+                  <>
+                    <Database className="w-3 h-3" />
+                    <span>Cached</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-3 h-3" />
+                    <span>Mock Data</span>
+                  </>
+                )}
+              </div>
+
+              {/* API Usage Tracker */}
+              <div className="text-xs text-gray-500">
+                API: {apiUsage.callsToday}/{apiUsage.maxCalls}
+              </div>
             </div>
           </div>
         </div>

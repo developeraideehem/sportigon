@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
@@ -25,7 +25,9 @@ export interface Match {
 
 export interface Standing {
   id: string;
-  team: string;
+  team_name: string;
+  league: string;
+  position: number;
   played: number;
   won: number;
   drawn: number;
@@ -34,5 +36,5 @@ export interface Standing {
   goals_against: number;
   goal_difference: number;
   points: number;
-  position: number;
+  sport: string;
 }

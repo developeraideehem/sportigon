@@ -18,12 +18,20 @@ export default function MatchCard({ match }: MatchCardProps) {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+    <div 
+      className="bg-white border border-gray-200 rounded-lg hover:shadow-lg hover:border-livescore-primary transition-all duration-300 cursor-pointer group"
+      onClick={() => {
+        // Future: Navigate to match details page
+        console.log('Match clicked:', match.id);
+      }}
+    >
       <div className="flex items-center justify-between p-4">
         <div className="flex-1">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2 flex-1">
-              <span className="font-semibold text-gray-900">{match.home_team}</span>
+              <span className="font-semibold text-gray-900 group-hover:text-livescore-primary transition-colors">
+                {match.home_team}
+              </span>
             </div>
             {(isLive || isFinished) && (
               <span className="text-2xl font-bold text-gray-900 ml-4">
@@ -34,7 +42,9 @@ export default function MatchCard({ match }: MatchCardProps) {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 flex-1">
-              <span className="font-semibold text-gray-900">{match.away_team}</span>
+              <span className="font-semibold text-gray-900 group-hover:text-livescore-primary transition-colors">
+                {match.away_team}
+              </span>
             </div>
             {(isLive || isFinished) && (
               <span className="text-2xl font-bold text-gray-900 ml-4">
@@ -56,23 +66,27 @@ export default function MatchCard({ match }: MatchCardProps) {
           }`}>
             {getStatusDisplay()}
           </span>
-          {match.stadium && (
-            <div className="flex items-center space-x-1 mt-1">
-              <MapPin className="w-3 h-3 text-gray-400" />
-              <span className="text-xs text-gray-500">{match.stadium}</span>
-            </div>
-          )}
         </div>
       </div>
 
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between text-xs text-gray-600">
-        <span className="font-medium">{match.league}</span>
-        {!isLive && !isFinished && (
-          <div className="flex items-center space-x-1">
-            <Clock className="w-3 h-3" />
-            <span>{format(new Date(match.match_time), 'MMM dd, HH:mm')}</span>
-          </div>
-        )}
+      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between text-xs text-gray-600 group-hover:bg-green-50 transition-colors">
+        <div className="flex items-center space-x-2">
+          <span className="font-medium">{match.league}</span>
+        </div>
+        <div className="flex items-center space-x-3">
+          {match.stadium && (
+            <div className="flex items-center space-x-1">
+              <MapPin className="w-3 h-3 text-gray-400" />
+              <span className="text-gray-500 hidden md:inline">{match.stadium}</span>
+            </div>
+          )}
+          {!isLive && !isFinished && (
+            <div className="flex items-center space-x-1">
+              <Clock className="w-3 h-3" />
+              <span>{format(new Date(match.match_time), 'MMM dd, HH:mm')}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
