@@ -48,7 +48,9 @@ export default function Standings() {
 
       return {
         id: `${idx + 1}`,
-        team,
+        team_name: team,
+        league: 'Premier League',
+        sport: 'football',
         played,
         won,
         drawn,
@@ -119,15 +121,14 @@ export default function Standings() {
                   {standings.map((standing) => (
                     <tr
                       key={standing.id}
-                      className={`hover:bg-gray-50 transition-colors ${
-                        standing.position <= 4
+                      className={`hover:bg-gray-50 transition-colors ${standing.position <= 4
                           ? 'bg-blue-50'
                           : standing.position <= 6
-                          ? 'bg-green-50'
-                          : standing.position >= standings.length - 2
-                          ? 'bg-red-50'
-                          : ''
-                      }`}
+                            ? 'bg-green-50'
+                            : standing.position >= standings.length - 2
+                              ? 'bg-red-50'
+                              : ''
+                        }`}
                     >
                       <td className="px-4 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -144,7 +145,7 @@ export default function Standings() {
                         </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="font-medium text-gray-900">{standing.team}</span>
+                        <span className="font-medium text-gray-900">{standing.team_name}</span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-700">
                         {standing.played}
