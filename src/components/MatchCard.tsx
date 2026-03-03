@@ -1,93 +1,179 @@
-import { Match } from '@/lib/supabase';
-import { Clock, MapPin } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import type { Match } from '@/lib/supabase';
+import LiveBadge from './LiveBadge';
+import ScoreDisplay from './ScoreDisplay';
 
 interface MatchCardProps {
   match: Match;
+  compact?: boolean;
 }
 
-export default function MatchCard({ match }: MatchCardProps) {
+/** Returns 1-2 letter initials from a team name */
+function teamInitials(name: string) {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+/** Hash a string to one of several colors for the avatar placeholder */
+function teamColor(name: string): string {
+  const colors = ['#ff6b2b', '#f7b731', '#48bb78', '#63b3ed', '#9f7aea', '#fc4444', '#38b2ac'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
+  return colors[Math.abs(h) % colors.length];
+}
+
+function TeamAvatar({ name, logo }: { name: string; logo?: string }) {
+  const [imgErr, setImgErr] = useState(false);
+  const color = teamColor(name);
+
+  if (logo && !imgErr) {
+    return (
+      <img
+        src={logo}
+        alt={name}
+        onError={() => setImgErr(true)}
+        className="w-9 h-9 rounded-full object-contain"
+        style={{ background: 'rgba(255,255,255,0.05)' }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white shrink-0"
+      style={{ background: color }}
+    >
+      {teamInitials(name)}
+    </div>
+  );
+}
+
+export default function MatchCard({ match, compact = false }: MatchCardProps) {
+  const navigate = useNavigate();
   const isLive = match.status === 'live' || match.status === 'halftime';
   const isFinished = match.status === 'finished';
+  const isScheduled = match.status === 'scheduled';
+  const prevScoreRef = useRef({ h: match.home_score, a: match.away_score });
+  const [popHome, setPopHome] = useState(false);
+  const [popAway, setPopAway] = useState(false);
 
-  const getStatusDisplay = () => {
-    if (match.status === 'live') return `${match.minute}'`;
-    if (match.status === 'halftime') return 'HT';
-    if (match.status === 'finished') return 'FT';
-    return format(new Date(match.match_time), 'HH:mm');
+  // Animate score pop on change
+  useEffect(() => {
+    if (match.home_score !== prevScoreRef.current.h) {
+      setPopHome(true);
+      setTimeout(() => setPopHome(false), 400);
+    }
+    if (match.away_score !== prevScoreRef.current.a) {
+      setPopAway(true);
+      setTimeout(() => setPopAway(false), 400);
+    }
+    prevScoreRef.current = { h: match.home_score, a: match.away_score };
+  }, [match.home_score, match.away_score]);
+
+  const cardStyle: React.CSSProperties = {
+    background: isLive
+      ? 'linear-gradient(135deg, rgba(26,26,46,0.9) 0%, rgba(30,15,15,0.95) 100%)'
+      : 'rgba(26,26,46,0.85)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    border: isLive ? '1px solid rgba(252,68,68,0.25)' : '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
+    boxShadow: isLive ? 'var(--shadow-live), var(--shadow-card)' : 'var(--shadow-card)',
+    cursor: 'pointer',
+    transition: 'all 0.2s var(--ease-smooth)',
+    padding: compact ? '12px 14px' : '16px 18px',
+    position: 'relative',
+    overflow: 'hidden',
   };
 
   return (
-    <div 
-      className="bg-white border border-gray-200 rounded-lg hover:shadow-lg hover:border-livescore-primary transition-all duration-300 cursor-pointer group"
-      onClick={() => {
-        // Future: Navigate to match details page
-        console.log('Match clicked:', match.id);
-      }}
+    <article
+      style={cardStyle}
+      className="group hover:-translate-y-1"
+      onClick={() => navigate(`/match/${match.id}`)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && navigate(`/match/${match.id}`)}
+      aria-label={`${match.home_team} vs ${match.away_team}`}
     >
-      <div className="flex items-center justify-between p-4">
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2 flex-1">
-              <span className="font-semibold text-gray-900 group-hover:text-livescore-primary transition-colors">
-                {match.home_team}
-              </span>
-            </div>
-            {(isLive || isFinished) && (
-              <span className="text-2xl font-bold text-gray-900 ml-4">
-                {match.home_score}
-              </span>
-            )}
-          </div>
+      {/* Live glow stripe at top */}
+      {isLive && (
+        <div
+          className="absolute top-0 left-0 right-0 h-0.5"
+          style={{ background: 'linear-gradient(90deg, transparent, var(--live-red), transparent)' }}
+        />
+      )}
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 flex-1">
-              <span className="font-semibold text-gray-900 group-hover:text-livescore-primary transition-colors">
-                {match.away_team}
-              </span>
-            </div>
-            {(isLive || isFinished) && (
-              <span className="text-2xl font-bold text-gray-900 ml-4">
-                {match.away_score}
-              </span>
-            )}
-          </div>
+      {/* League row */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-medium truncate max-w-[160px]" style={{ color: 'var(--text-muted)' }}>
+          {match.league}
+        </span>
+        {isLive && <LiveBadge minute={match.minute} status={match.status} />}
+        {isFinished && (
+          <span className="pill pill-neutral text-xs">FT</span>
+        )}
+        {isScheduled && (
+          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+            {format(new Date(match.match_time), 'HH:mm')}
+          </span>
+        )}
+      </div>
+
+      {/* Teams + Score */}
+      <div className="flex items-center gap-3">
+        {/* Home */}
+        <div className="flex flex-col items-center gap-1.5 flex-1">
+          <TeamAvatar name={match.home_team} logo={match.home_logo} />
+          <span className="text-xs font-semibold text-center leading-tight line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+            {match.home_team}
+          </span>
         </div>
 
-        <div className="ml-6 flex flex-col items-center justify-center min-w-[60px]">
-          {isLive && (
-            <div className="flex items-center space-x-1 mb-1">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-xs font-semibold text-red-500">LIVE</span>
+        {/* Score */}
+        <div className="flex flex-col items-center gap-1 shrink-0">
+          {isScheduled ? (
+            <span className="text-2xl font-bold" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>vs</span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <ScoreDisplay
+                score={match.home_score}
+                isLive={isLive}
+                pop={popHome}
+              />
+              <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '1.25rem' }}>–</span>
+              <ScoreDisplay
+                score={match.away_score}
+                isLive={isLive}
+                pop={popAway}
+              />
             </div>
           )}
-          <span className={`text-sm font-semibold ${
-            isLive ? 'text-red-500' : isFinished ? 'text-gray-500' : 'text-gray-700'
-          }`}>
-            {getStatusDisplay()}
+          {isLive && match.status === 'halftime' && (
+            <span className="text-xs font-semibold" style={{ color: 'var(--accent-amber)' }}>HT</span>
+          )}
+        </div>
+
+        {/* Away */}
+        <div className="flex flex-col items-center gap-1.5 flex-1">
+          <TeamAvatar name={match.away_team} logo={match.away_logo} />
+          <span className="text-xs font-semibold text-center leading-tight line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+            {match.away_team}
           </span>
         </div>
       </div>
 
-      <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between text-xs text-gray-600 group-hover:bg-green-50 transition-colors">
-        <div className="flex items-center space-x-2">
-          <span className="font-medium">{match.league}</span>
-        </div>
-        <div className="flex items-center space-x-3">
-          {match.stadium && (
-            <div className="flex items-center space-x-1">
-              <MapPin className="w-3 h-3 text-gray-400" />
-              <span className="text-gray-500 hidden md:inline">{match.stadium}</span>
-            </div>
-          )}
-          {!isLive && !isFinished && (
-            <div className="flex items-center space-x-1">
-              <Clock className="w-3 h-3" />
-              <span>{format(new Date(match.match_time), 'MMM dd, HH:mm')}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+      {/* Hover shine */}
+      <div
+        className="absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-300"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,107,43,0.03) 0%, transparent 60%)',
+          borderRadius: 'var(--radius-lg)',
+        }}
+      />
+    </article>
   );
 }

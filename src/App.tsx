@@ -1,28 +1,33 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import Header from '@/components/Header';
-import SportsTabs from '@/components/SportsTabs';
+import AppShell from '@/layouts/AppShell';
 import LiveScores from '@/pages/LiveScores';
 import Standings from '@/pages/Standings';
-import { useMatchStore } from '@/store/matchStore';
+import MatchDetail from '@/pages/MatchDetail';
 
 function App() {
-  const { selectedSport, setSelectedSport } = useMatchStore();
-
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Toaster position="top-right" />
-        <Header />
-        <SportsTabs selectedSport={selectedSport} onSelectSport={setSelectedSport} />
-
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border)',
+            fontFamily: 'var(--font-sans)',
+          },
+        }}
+      />
+      <AppShell>
         <Routes>
           <Route path="/" element={<LiveScores />} />
           <Route path="/fixtures" element={<LiveScores />} />
           <Route path="/results" element={<LiveScores />} />
           <Route path="/standings" element={<Standings />} />
+          <Route path="/match/:id" element={<MatchDetail />} />
         </Routes>
-      </div>
+      </AppShell>
     </Router>
   );
 }
